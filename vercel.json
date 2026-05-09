@@ -1,13 +1,13 @@
 {
-  "version": 2,
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/server" }
-  ],
-  "functions": {
-    "api/server.js": {
-      "maxDuration": 60
+  "experimentalServices": {
+    "frontend": {
+      "entrypoint": "frontend",
+      "routePrefix": "/",
+      "framework": "vite"
+    },
+    "backend": {
+      "entrypoint": "api",
+      "routePrefix": "/api"
     }
   }
 }
