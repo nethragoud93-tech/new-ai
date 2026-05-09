@@ -4,22 +4,14 @@ import dotenv from 'dotenv';
 import { ManagerAgent } from '../backend/agents/Manager.js';
 import Anthropic from '@anthropic-ai/sdk';
 
-dotenv.config({ path: '../.env' });
-dotenv.config(); // also load local .env if present
+dotenv.config();
 
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// ─── Helper: register each route at BOTH /path and /api/path ─────────────────
-// Vercel may or may not strip the routePrefix before forwarding — this handles both.
-const route = (method, path, handler) => {
-  app[method](path, handler);
-  app[method](`/api${path}`, handler);
-};
-
-// ─── SSE: streaming agent research pipeline ───────────────────────────────────
-const streamHandler = async (req, res) => {
+// ─── SSE: streaming research pipeline ───────────────────────────────────────
+app.get('/api/research/stream', async (req, res) => {
   const { topic } = req.query;
 
   if (!topic) {
@@ -52,19 +44,17 @@ const streamHandler = async (req, res) => {
   } finally {
     res.end();
   }
-};
+});
 
-route('get', '/research/stream', streamHandler);
-
-// ─── POST: generic AI tool ────────────────────────────────────────────────────
-const toolHandler = async (req, res) => {
+// ─── POST: generic AI tool endpoint ─────────────────────────────────────────
+app.post('/api/tool', async (req, res) => {
   const { tool, input } = req.body;
   if (!tool || !input) {
     return res.status(400).json({ error: 'Tool name and input are required' });
   }
 
   const systemPrompts = {
-    debugger:  'You are an expert code debugger. Analyze the provided code, identify bugs, and return corrected code with a clear explanation.',
+    debugger:  'You are an expert code debugger. Analyze the provided code, identify any bugs, and return corrected code with a clear explanation.',
     analytics: 'You are a senior data scientist. Analyze the data, identify trends and outliers, and summarize actionable insights.',
     email:     'You are an executive assistant AI. Draft a professional, concise email based on the context provided.',
     scheduler: 'You are a smart scheduling assistant. Parse the tasks and return an optimally organized daily schedule.',
@@ -113,7 +103,7 @@ const toolHandler = async (req, res) => {
 
     } else {
       await new Promise(r => setTimeout(r, 1500));
-      resultText = `[Simulated response for ${tool}]: Analyzed input "${input.substring(0, 20)}...". Add a GROQ_API_KEY env var for real AI responses.`;
+      resultText = `[Simulated response for ${tool}]: Analyzed input "${input.substring(0, 20)}...". Add a GROQ_API_KEY to your environment for real AI responses.`;
     }
 
     res.json({ result: resultText });
@@ -121,32 +111,16 @@ const toolHandler = async (req, res) => {
     console.error(`Tool error (${tool}):`, error);
     res.status(500).json({ error: error.message });
   }
-};
+});
 
-route('post', '/tool', toolHandler);
-
-// ─── GET: health check ────────────────────────────────────────────────────────
-const healthHandler = (req, res) => {
+// ─── GET: health check ───────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
     simulationMode: process.env.SIMULATION_MODE !== 'false',
     timestamp: new Date().toISOString(),
   });
-};
+});
 
-route('get', '/health', healthHandler);
-
-// ─── Conditional server start ─────────────────────────────────────────────────
-// On Vercel, the app is exported as a serverless handler.
-// Locally (or on Render), it starts as a regular Node.js server.
-if (!process.env.VERCEL) {
-  const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`\n🤖 AI Research Crew API`);
-    console.log(`   Running on http://localhost:${PORT}`);
-    console.log(`   Simulation Mode: ${process.env.SIMULATION_MODE !== 'false'}`);
-    console.log(`   Groq API: ${process.env.GROQ_API_KEY ? 'Configured' : 'Not set'}\n`);
-  });
-}
-
+// Vercel exports the Express app as the default handler (no app.listen)
 export default app;

@@ -11,8 +11,9 @@ const SIMULATED_FINDINGS = {
 };
 
 export class ResearcherAgent {
-  constructor({ simulationMode }) {
+  constructor({ simulationMode, tavilyKey }) {
     this.simulationMode = simulationMode;
+    this.tavilyKey = tavilyKey || process.env.TAVILY_API_KEY;
   }
 
   generateExtendedFindings(topic) {
@@ -26,12 +27,44 @@ export class ResearcherAgent {
     const findings = [];
     const confidence_factors = [];
 
-    for (let i = 0; i < subtasks.length; i++) {
-      const task = subtasks[i];
-      onProgress(`Searching: "${task.substring(0, 50)}..."`);
-      await sleep(600 + Math.random() * 400);
+    if (!this.simulationMode && this.tavilyKey) {
+      for (const task of subtasks) {
+        onProgress(`Searching: "${task.substring(0, 50)}..."`);
+        try {
+          const res = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: this.tavilyKey,
+              query: task,
+              search_depth: "basic",
+              max_results: 3
+            })
+          });
+          const data = await res.json();
+          if (data.results) {
+            data.results.forEach(r => {
+              findings.push({
+                source: r.title || new URL(r.url).hostname,
+                snippet: r.content,
+                url: r.url,
+                reliability: r.score || 0.85
+              });
+              confidence_factors.push(r.score || 0.85);
+            });
+          }
+        } catch (err) {
+          console.error("Tavily search failed for task:", task, err);
+        }
+        await sleep(200);
+      }
+    } else {
+      // Simulation Mode
+      for (let i = 0; i < subtasks.length; i++) {
+        const task = subtasks[i];
+        onProgress(`Searching: "${task.substring(0, 50)}..."`);
+        await sleep(600 + Math.random() * 400);
 
-      if (this.simulationMode) {
         const base = SIMULATED_FINDINGS.generic[i % SIMULATED_FINDINGS.generic.length];
         findings.push({
           ...base,
@@ -42,8 +75,11 @@ export class ResearcherAgent {
       }
     }
 
-    const confidence = confidence_factors.reduce((a, b) => a + b, 0) / confidence_factors.length;
+    const confidence = confidence_factors.length > 0 
+      ? confidence_factors.reduce((a, b) => a + b, 0) / confidence_factors.length
+      : 0.5;
 
     return { findings, confidence, subtasks };
   }
 }
+

@@ -105,12 +105,13 @@ Return ONLY valid JSON, no markdown formatting blocks. Just the raw JSON object.
     } else {
       const client = new Anthropic({ apiKey: this.anthropicKey });
       const message = await client.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       });
       raw = message.content[0].text;
     }
+
 
     onProgress('AI response received. Parsing output...');
     await sleep(300);
