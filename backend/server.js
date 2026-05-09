@@ -1,8 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { ManagerAgent } from './agents/Manager.js';
 import Anthropic from '@anthropic-ai/sdk';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: '../.env' });
 
@@ -11,6 +16,10 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the React frontend app
+const frontendPath = path.join(__dirname, '../frontend/dist');
+app.use(express.static(frontendPath));
 
 // SSE endpoint for streaming agent events
 app.get('/api/research/stream', async (req, res) => {
@@ -35,8 +44,11 @@ app.get('/api/research/stream', async (req, res) => {
     const manager = new ManagerAgent({
       simulationMode: process.env.SIMULATION_MODE !== 'false',
       anthropicKey: process.env.ANTHROPIC_API_KEY,
+      groqKey: process.env.GROQ_API_KEY,
+      tavilyKey: process.env.TAVILY_API_KEY,
       onEvent: sendEvent,
     });
+
 
     await manager.run(topic);
     sendEvent('complete', { message: 'Research mission complete.' });
@@ -119,6 +131,12 @@ app.post('/api/tool', async (req, res) => {
     console.error(`Tool error (${tool}):`, error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 app.get('/api/health', (req, res) => {
